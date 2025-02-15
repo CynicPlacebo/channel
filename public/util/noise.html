@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Noise Machine</title>
+  <meta name="description" content="Noises for Sleeping, Meditating, or Relaxing">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style type="text/css">
+    html,body { background-color:#000; color:#eee; }
+    a {
+      color:#373e94;
+      cursor:pointer;
+      text-decoration:none;
+    }
+    a:hover { text-decoration:underline; }
+    audio {
+      width:80%;
+    }
+    main {
+      font-size:1.2rem;
+      text-align:center;
+    }
+    select {
+      background-color:#222;
+      color:#aaa;
+      font-size:2rem;
+      margin:10px 0px 30px 0px;
+      text-align:center;
+      max-width:98%;
+    }
+    select.smallScreen { font-size:1.3rem; }
+    option {
+      background-color:#111;
+      color:#aaa;
+      font-size:1.3rem;
+    }
+    #cc {
+      margin:40px 0px;
+      opacity:0.6;
+    }
+    #cc a { color:#ff7df4;    }
+    #content { opacity:0.7; }
+    #content.hideForBlackScreen { visibility:hidden; }
+    #controls { padding-right:10px; text-align:right; }
+    #controls.hideForBlackScreen .hider { display:none; }
+    #controls .unhider { display:none; }
+    #controls.hideForBlackScreen .unhider { display:inline; }
+  </style>
+  <script type="text/javascript">
+    var noiseKey = 'public.util.noise';
+    var noiseI = 2; //default to Brown Noise, because it's my favorite
+    var noises = [ //cc is for Creative Commons Attribution
+      {name:"Ambient Music Onycs", mp3:"onycs_eden_celeste.mp3", cc:'Audio by <a href="https://www.youtube.com/watch?v=Chdbbro24ws" target="_blank">Onycs</a>'},
+      {name:"Ambient Music Spheria", mp3:"spheria_ambient.mp3", cc:'Audio by <a href="https://www.youtube.com/watch?v=V4rFZXBq8fw" target="_blank">Spheria</a>'},
+      {name:"Brown Noise", mp3:"brown.mp3", cc:'Audio by <a href="https://www.youtube.com/@CynicPlacebo" target="_blank">Cynic Placebo</a>'},
+      {name:"Lofi Music Amine Maxwell", mp3:"amine_maxwell.mp3", cc:'Audio by <a href="https://www.youtube.com/watch?v=y7ykF-XNUu8" target="_blank">Amine Maxwell</a>'},
+      {name:"Lofi Music Ghostrifter", mp3:"ghostrifter.mp3", cc:'Audio by <a href="https://www.youtube.com/watch?v=GPXo4AKuuGM" target="_blank">Ghostrifter</a>'},
+      //TODO: make a longer Ghostrifter compilation??? https://www.youtube.com/@GhostrifterOfficial/videos
+      {name:"Lofi Music Loxbeats", mp3:"loxbeats.mp3", cc:'Audio by <a href="https://www.youtube.com/watch?v=IRnO_fYI2zU" target="_blank">Loxbeats</a>'},
+      {name:"Piano Music Alexander Nakarada", mp3:"alexander_nakarada.mp3", cc:'Audio by <a href="https://www.youtube.com/watch?v=QkY6de1JVjs" target="_blank">Alexander Nakarada</a>'},
+      //TODO: more free audio (Ocean, Wind, Whales, Birds, etc...)
+    ];
+
+    /** Set Up the GUI & Select Audio (default, last played, or from URL) **/
+    function init() {
+      browserSpecificStyling();
+      // Populate <option>s in <select> with `noises`
+      let avail = document.getElementById('avail');
+      let hash = location.hash; //will be altered, so save orig
+      for (let i=0; i < noises.length; ++i) {
+        let opt = document.createElement('OPTION');
+        opt.value = i;
+        opt.innerText = noises[i].name;
+        if (i == noiseI)
+          opt.selected = 'selected';
+        avail.appendChild(opt);
+      }
+      // Re-Select Last Played (likely they want to continue)
+      let storedI = localStorage.getItem(noiseKey);
+      if (null != storedI) {
+        storedI.replace(/[^0-9]/g, '')
+        storedI = parseInt(storedI);
+        switchAudio(storedI);
+      }
+      // Explicit URL Index, so use that (someone linked them to their favorite)
+      if (hash.length >= 2) { //We have a hash value. Use it (it will trump localStorage copy)
+        console.log('Using Audio Index from URL Hash: ' + hash);
+        switchAudio(parseInt(hash.substr(1))); //Trim off the "#"
+      }
+      // Rezising of the Window
+      windowResizeHandler(); //always call once
+      window.addEventListener('resize', windowResizeHandler, true); //and again on resize
+    }
+
+    /** Deal with Browser Specific visual quirks for Dark Mode **/
+    function browserSpecificStyling() {
+      // Chrome Specific
+      if (navigator.appVersion.indexOf("Chrome/") != -1) {
+        //Chrome has a bright white <audio>, so make it more transparent
+        let audio = document.getElementById('audio');
+        audio.style.opacity = "0.3";
+      }
+    }
+
+    /** From: https://stackoverflow.com/questions/67745924/javascript-html-audio-element-play-error-handling-neither-ends-nor-shows-any-er **/
+    async function playNwait(audio) { //Catches errors when Browser disallows .play() on an <audio> tag
+      return new Promise (async (resolve, reject) => {
+        audio.onerror = (event) => {
+          console.log('Play Error: ' + audio.error.code);
+          console.log('Play Error: ' + audio.error.message);
+          console.log('Play Error: ' + event.currentTarget.error.code);
+          console.log('Play Error: ' + event.currentTarget.error.message);
+          reject('Audio failed');
+        };
+        audio.abort = (event) => {console.log('playNwait: abort');};
+        audio.loadstart = (event) => {console.log('playNwait: loadstart');};
+        audio.onplay = (event) => {console.log('playNwait: playing');};
+        audio.onended = (event) => {console.log('playNwait: ended'); resolve('Audio ended');};
+        console.log('playNwait: started');
+        console.log(audio.src);
+        audio.addEventListener("error", function(e) {
+          console.log("Playback error: " + e.currentTarget.error.code);
+          var prop, props='\nEvent properties are: ';
+          var o = e.currentTarget.error;
+          for (prop in o)
+            props += prop+'='+o[prop]+' ';
+          console.log(props);
+          reject('Audio failed');
+        });         
+        try {
+          await audio.play();
+        } catch (err) {
+          console.log('ERROR: Media play error: ' + err.name + ' - ' + err.message);
+        }
+      });
+    }
+
+    /** 1 to hide all, 0 to show all **/
+    function screenHide(hidden) {
+      document.getElementById('content').classList.toggle('hideForBlackScreen');
+      document.getElementById('controls').classList.toggle('hideForBlackScreen');
+    }
+
+    /** Switch to index of audio in `noises` **/
+    function switchAudio(i) {
+      let audio = document.getElementById('audio');
+      let cc = document.getElementById('cc');
+      noiseI = i;
+      localStorage.setItem(noiseKey, i);
+      audio.src = 'noise/' + noises[i].mp3;
+      audio.load();
+      location.hash = i; //set URL_HASH so people can copy link to friend
+      cc.innerHTML = noises[i].cc;
+      playNwait(audio);
+      //Ensure <select> matches (like if loaded from URL Hash or localStorage)
+      let avail = document.getElementById('avail');
+      avail.value = i;
+    }
+
+    /** If Window gets too small, Shrink <select> **/
+    function windowResizeHandler() {
+      console.log("Width: " + window.innerWidth);
+      if (window.innerWidth < 800) { // Small Screens / Windows
+        document.getElementById('avail').classList.add('smallScreen');
+      } else { // Big Screen
+        document.getElementById('avail').classList.remove('smallScreen');
+      }
+    }
+  </script>
+</head>
+
+<body onload="init()">
+  <main id="main">
+    <div id="controls">
+      <a href="javascript:screenHide(1)" class="hider">Hide All (for Black Screen)</a>
+      <a href="javascript:screenHide(0)" class="unhider">Show</a>
+    </div>
+    <div id="content">
+      <select id="avail" onchange="switchAudio(this.value)"></select><br/>
+      <audio id="audio" autoplay loop controls><source id="source" src="noise/brown.mp3" type="audio/mpeg"></audio>
+      <p id="cc">Audio by <a href="https://www.youtube.com/@CynicPlacebo" target="_blank">Cynic Placebo</a></p>
+    </div>
+  </main>
+</body>
+</html>
